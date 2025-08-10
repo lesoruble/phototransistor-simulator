@@ -21,7 +21,7 @@ from .config import KernelConfig
 from .data_io import load_all_characterization_from_folder, normalize_input_image, SimpleChar
 from .kernel import get_iph_for_vtg_interpolated
 from .presets import ALL_PRESET_KERNELS, ZX_SPECTRUM_FONT
-from .simulator import Simulator, FixedPowerResult, DynamicRegimeResult
+from .simulator import Simulator, FixedPowerResult, DynamicModeResult
 
 
 log = logging.getLogger(__name__)
@@ -328,7 +328,6 @@ class ConvolutionApp:
         except (ValueError, RuntimeError) as e:
             self.update_step_text(f"Error: {e}")
 
-    # In gui.py, replace the whole function
     def calculate_dynamic_regime(self):
         global fixed_optimal_voltages, current_kernel_weights, current_kernel_voltages
         if not self.simulator: return
