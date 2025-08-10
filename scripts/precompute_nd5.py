@@ -33,7 +33,7 @@ print("--- ND=5 Voltage Pre-computation Script ---")
 cfg = KernelConfig()
 CLEAN_ND_FOR_PRIOR = 4
 NOISY_ND_TO_FIT = 5
-OUTPUT_FILENAME = "nd5_voltage_cache.json"
+OUTPUT_FILENAME = os.path.join(project_root, "nd5_voltage_cache.json")
 
 # --- Helper function to find all intersections ---
 def find_intersections(x_data, y_data, target_y):
@@ -98,7 +98,7 @@ for pixel_coord in all_pixel_coords:
 print("\n--- Step 2: Calculating voltage maps for each preset kernel ---")
 
 # --- Create a directory for debug plots ---
-debug_plot_dir = "precompute_debug_plots"
+debug_plot_dir = os.path.join(project_root, "precompute_debug_plots")
 os.makedirs(debug_plot_dir, exist_ok=True)
 print(f"  - Saving debug plots to '{debug_plot_dir}/'")
 min_x, min_y = min(k[0] for k in full_char_data.keys()), min(k[1] for k in full_char_data.keys())
