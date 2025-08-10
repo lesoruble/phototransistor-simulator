@@ -1,0 +1,22 @@
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+.env
+.venv
+venv/
+
+# IDE / Editor Specific
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
+
+# Project-Specific Generated Files
+nd5_voltage_cache.json
+precompute_debug_plots/
+image_comparison*.png
+DEBUG_LOG.txt
+
+# --- Ignore Sensitive Data Folders ---
+250624_SlothGUI/
