@@ -45,9 +45,10 @@ adaptive-phototransistor-simulator/
 
 ## Setup and Installation
 
-1.  **Clone the repository:**
+1.  **Clone the repository and navigate into the project directory:**
     ```bash
     git clone https://github.com/lesoruble/phototransistor-simulator.git
+    cd phototransistor-simulator
     ```
 
 2.  **Create a virtual environment (recommended):**
