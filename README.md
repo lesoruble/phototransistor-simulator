@@ -74,6 +74,17 @@ python scripts/precompute_nd5.py
 
 ## How to Run
 
+## Analysis Scripts
+
+The `scripts/` directory contains additional Python scripts for performing detailed data analysis and generating plots. You can run them directly after setting up your environment.
+
+-   **`scripts/plotter_csv.py`**: Analyzes double-gated measurements to find the optimal back-gate voltage (`V_BG`) for maximizing photocurrent swing.
+-   **`scripts/plotter_pixels_bypower.py`**: Creates detailed plots of photocurrent vs. top-gate voltage for each pixel, grouped by optical power (ND filter). Includes advanced curve fitting for noisy data.
+
+**Example:**
+```bash
+python scripts/plotter_csv.py
+
 ### GUI Application
 
 To launch the graphical user interface, run the `run_gui.py` script:
