@@ -9,8 +9,9 @@ venv/
 .idea/
 .vscode/
 
-# macOS
+# macOS Specific
 .DS_Store
+*.textClipping
 
 # Project-Specific Generated Files
 nd5_voltage_cache.json
