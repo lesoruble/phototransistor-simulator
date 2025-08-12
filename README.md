@@ -84,6 +84,7 @@ The `scripts/` directory contains additional Python scripts for performing detai
 **Example:**
 ```bash
 python scripts/plotter_csv.py
+```
 
 ### GUI Application
 
