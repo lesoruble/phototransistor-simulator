@@ -21,3 +21,4 @@ DEBUG_LOG.txt
 
 # --- Ignore Sensitive Data Folders ---
 250624_SlothGUI/
+optimization_plots/
