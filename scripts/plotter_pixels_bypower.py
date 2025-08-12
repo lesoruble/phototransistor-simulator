@@ -7,17 +7,22 @@ import sys
 from scipy.optimize import curve_fit
 
 # --- Configuration ---
-data_directory_path = "250624_SlothGUI/"
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+data_directory_path = os.path.join(project_root, "250624_SlothGUI/")
 FILENAME_FILTER_KEYWORD = "KernelPhotoTopGating" 
 
 # --- Two-stage fitting configuration ---
 CLEAN_ND_FOR_PRIOR = 4
-NOISY_ND_TO_FIT = 5
+NOISY_ND_TO_FIT = 6
 
 # --- KERNEL CONFIGURATION ---
 KERNEL_3x3 = np.array([[-1,-1,-1],[-1,8,-1],[-1,-1,-1]])
 REFERENCE_PIXEL_X = 2
 REFERENCE_PIXEL_Y = 2
+
+# --- Plotting Units ---
+UNIT_SCALE = 1e9  # Convert from A to nA
+UNIT_LABEL = "nA"
 
 # --- Column Names ---
 gate1_col_name, gate2_col_name = "v_bg", "v_tg"
@@ -72,7 +77,7 @@ for filename in all_csv_files:
 master_df = pd.concat(all_data_list, ignore_index=True)
 for col in master_df.columns: master_df[col] = pd.to_numeric(master_df[col], errors="coerce")
 master_df.dropna(inplace=True)
-master_df[iph_col] = master_df[res_mag_col] * np.cos(np.deg2rad(master_df[phase_col]))
+master_df[iph_col] = (master_df[res_mag_col] * np.cos(np.deg2rad(master_df[phase_col]))) * UNIT_SCALE
 print(f"Total data points ready for plotting: {len(master_df)}")
 
 # --- Main Analysis ---
@@ -142,7 +147,7 @@ for nd_value in unique_nd_filters:
                 color=top_label_info['color'], linestyle=top_label_info['linestyle'], lw=1.0)
         ax.text(top_label_info['x'], line_end_y, top_label_info['text'],
                 color=top_label_info['color'], ha='center', va='bottom',
-                backgroundcolor=(1, 1, 1, 0.7), fontsize=12, zorder=12)
+                backgroundcolor=(1, 1, 1, 0.7), fontsize=14, zorder=12)
 
     if bottom_labels_to_plot:
         bottom_labels_to_plot.sort(key=lambda item: item['x'])
@@ -164,7 +169,7 @@ for nd_value in unique_nd_filters:
                     color=item['color'], linestyle=item['linestyle'], lw=1.0)
             ax.text(item['x'], final_y_pos, item['text'],
                     color=item['color'], ha='center', va='top',
-                    backgroundcolor=(1, 1, 1, 0.7), fontsize=12, zorder=12)
+                    backgroundcolor=(1, 1, 1, 0.7), fontsize=14, zorder=12)
             
             last_x = item['x']
 
@@ -172,10 +177,10 @@ for nd_value in unique_nd_filters:
 
     if not nd_group_df.empty:
         v_bg_val = nd_group_df[gate1_col_name].iloc[0]
-        ax.set_title(f"Photocurrent vs. Top Gate (ND Filter: {int(nd_value)}, Vbg = {v_bg_val:.2f} V)", fontsize=16)
-    ax.set_xlabel(f"Top Gate Voltage [V]", fontsize=12); ax.set_ylabel(f"In-Phase Photocurrent [A]", fontsize=12)
+        ax.set_title(f"Photocurrent vs. Top Gate (ND Filter: {int(nd_value)})", fontsize=20)
+    ax.set_xlabel(f"Top Gate Voltage [V]", fontsize=18); ax.set_ylabel(f"In-Phase Photocurrent [{UNIT_LABEL}]", fontsize=18)
     handles, labels = ax.get_legend_handles_labels(); by_label = dict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(), loc='upper left', fontsize=14)
+    ax.legend(by_label.values(), by_label.keys(), loc='upper left', fontsize=16)
     if targets:
         plt.draw(); xmin, xmax = ax.get_xlim()
         for weight, target_value in targets.items():
@@ -188,8 +193,8 @@ for nd_value in unique_nd_filters:
                 line_start_x = xmin + 0.1 * (xmax - xmin) 
                 text_x_pos = xmin + 0.2 * (xmax - xmin)
             ax.plot([line_start_x, xmax], [target_value, target_value], color=line_color, linestyle='--', linewidth=1.5, zorder=10)
-            ax.text(text_x_pos, target_value, f'Target (W={weight})', color=line_color, va='bottom', backgroundcolor=(1,1,1,0.7), fontsize=12)
-    fig.tight_layout(); ax.grid(True); ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+            ax.text(text_x_pos, target_value, f'Target (W={weight})', color=line_color, va='bottom', backgroundcolor=(1,1,1,0.7), fontsize=14)
+    fig.tight_layout(); ax.grid(True)
     plt.show()
 
 # --- PART 2: SEPARATE BLOCK FOR THE NOISY ND FILTER ---
@@ -202,7 +207,7 @@ if NOISY_ND_TO_FIT in unique_nd_filters:
     # STAGE 1: DIAGNOSTIC PLOTS
     print("-> Running diagnostic grid search fitting workflow...")
     fig_diag, axes_diag = plt.subplots(3, 3, figsize=(20, 15), sharex=True, sharey=True)
-    fig_diag.suptitle(f'Grid Search Fit Comparison for ND={NOISY_ND_TO_FIT}', fontsize=16)
+    fig_diag.suptitle(f'Grid Search Fit Comparison for ND={NOISY_ND_TO_FIT}', fontsize=20)
     pixel_fits = {} 
     for i, (_, pixel_info) in enumerate(unique_pixels.iterrows()):
         ax_diag = axes_diag.flat[i]; x, y = pixel_info[x_coord_col], pixel_info[y_coord_col]
@@ -245,7 +250,7 @@ if NOISY_ND_TO_FIT in unique_nd_filters:
             y_fit = fit_result['func'](x_fit, *fit_result['popt'])
             label = f"{fit_result['name']} (P:{fit_result['prior_name']}, R²={fit_result['r2']:.3f})"
             ax_diag.plot(x_fit, y_fit, fit_styles.get(fit_result['name'], 'k-'), label=label, linewidth=2.5, alpha=1-rank*0.2)
-        ax_diag.set_title(f'Pixel ({int(x)},{int(y)})'); ax_diag.legend(fontsize=8)
+        ax_diag.set_title(f'Pixel ({int(x)},{int(y)})'); ax_diag.legend(fontsize=10)
     plt.tight_layout(rect=[0, 0.03, 1, 0.96]); plt.show(); plt.close(fig_diag)
 
     # STAGE 2: FINAL ANALYSIS PLOT
@@ -283,7 +288,7 @@ if NOISY_ND_TO_FIT in unique_nd_filters:
                 vtg_at_max = x_fit[np.argmax(y_fit)]; max_iph = np.max(y_fit)
                 ax_final.plot(vtg_at_max, max_iph, 'X', color='red', markersize=7, zorder=11)
                 ax_final.plot([vtg_at_max, vtg_at_max], [max_iph, ax_final.get_ylim()[1]], color=color, linestyle=':', lw=1.5)
-                ax_final.text(vtg_at_max, ax_final.get_ylim()[1]*0.90, f'{vtg_at_max:.2f}V', color=color, ha='center', va='bottom', fontweight='bold', backgroundcolor=(1,1,1,0.6), fontsize=12)
+                ax_final.text(vtg_at_max, ax_final.get_ylim()[1]*0.90, f'{vtg_at_max:.2f}V', color=color, ha='center', va='bottom', fontweight='bold', backgroundcolor=(1,1,1,0.6), fontsize=14)
             elif targets and pixel_weight in targets:
                 specific_target = targets[pixel_weight]
                 crossings = find_intersections(x_fit, y_fit, specific_target)
@@ -294,11 +299,11 @@ if NOISY_ND_TO_FIT in unique_nd_filters:
                         ax_final.text(cross_x, ax_final.get_ylim()[0]*0.88, f'{cross_x:.2f}V', color=color, ha='center', va='top', backgroundcolor=(1,1,1,0.6))
     
     v_bg_val = nd_group_df[gate1_col_name].iloc[0]
-    ax_final.set_title(f"Final Analysis for ND={NOISY_ND_TO_FIT} (Vbg = {v_bg_val:.2f}V) using Best Fits", fontsize=16)
-    ax_final.set_xlabel(f"Top Gate Voltage [V]"); ax_final.set_ylabel(f"In-Phase Photocurrent [A]")
+    ax_final.set_title(f"Final Analysis for ND={NOISY_ND_TO_FIT} using Best Fits", fontsize=20)
+    ax_final.set_xlabel(f"Top Gate Voltage [V]", fontsize=18); ax_final.set_ylabel(f"In-Phase Photocurrent [{UNIT_LABEL}]", fontsize=18)
     
     handles, labels = ax_final.get_legend_handles_labels(); by_label = dict(zip(labels, handles))
-    ax_final.legend(by_label.values(), by_label.keys(), loc='upper left', fontsize=10)
+    ax_final.legend(by_label.values(), by_label.keys(), loc='upper left', fontsize=14)
 
     if targets:
         plt.draw()
@@ -314,9 +319,9 @@ if NOISY_ND_TO_FIT in unique_nd_filters:
                 text_x_pos = xmin + 0.2 * (xmax - xmin)
             
             ax_final.plot([line_start_x, xmax], [target_value, target_value], color=line_color, linestyle='--', linewidth=1.5, zorder=10)
-            ax_final.text(text_x_pos, target_value, f'Target (W={weight})', color=line_color, va='bottom', backgroundcolor=(1,1,1,0.7), fontsize=11)
+            ax_final.text(text_x_pos, target_value, f'Target (W={weight})', color=line_color, va='bottom', backgroundcolor=(1,1,1,0.7), fontsize=14)
     
-    fig_final.tight_layout(); ax_final.grid(True); ax_final.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+    fig_final.tight_layout(); ax_final.grid(True)
     plt.show()
 
 print("\nAnalysis complete.")

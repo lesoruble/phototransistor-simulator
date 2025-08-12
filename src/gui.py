@@ -115,6 +115,7 @@ class SaveOptionsDialog(tk.Toplevel):
 
 
 class ConvolutionApp:
+
     def __init__(self, master):
         self.master = master; master.title("Adaptive Phototransistor Kernel Simulator"); self.detail_font = tkFont.Font(family="Courier New", size=14); self.output_image_tk_ref, self.input_image_tk_ref = None, None
         self.current_preset_name = "CUSTOM"
@@ -163,6 +164,15 @@ class ConvolutionApp:
                         if isinstance(widget, (ttk.Button, ttk.Entry, ttk.Combobox)):
                             widget.config(state=tk.DISABLED)
             self.load_image_button.config(state=tk.NORMAL)
+            if hasattr(self, 'pixel_x_entry'):
+                self.pixel_x_entry.config(state=tk.DISABLED)
+                self.pixel_y_entry.config(state=tk.DISABLED)
+            if hasattr(self, 'plot_char_surface_button'):
+                self.plot_char_surface_button.config(state=tk.DISABLED)
+            if hasattr(self, 'plot_ratio_button'):
+                self.plot_ratio_button.config(state=tk.DISABLED)
+            if hasattr(self, 'plot_response_button'):
+                self.plot_response_button.config(state=tk.DISABLED)
 
             
     def is_in_dynamic_mode(self): return self.power_combobox.get() == "Dynamic Mode"
@@ -175,10 +185,123 @@ class ConvolutionApp:
         # --- Define all major frames first ---
         self.row0_frame = ttk.Frame(self.content_main_frame); self.row0_frame.pack(fill=tk.X, pady=5) 
         self.row1_frame = ttk.Frame(self.content_main_frame); self.row1_frame.pack(fill=tk.X, pady=10)
-        self.conv_control_outer_frame = ttk.LabelFrame(self.content_main_frame, text="Convolution Control"); self.conv_control_outer_frame.pack(fill=tk.X, pady=5, padx=5) 
+        self.row2_frame = ttk.Frame(self.content_main_frame); self.row2_frame.pack(fill=tk.X, pady=5)
         self.bottom_row_frame = ttk.Frame(self.content_main_frame); self.bottom_row_frame.pack(fill=tk.BOTH, expand=True, pady=10)
 
-         # --- Populate Bottom Row (Display Panels) ---
+        # --- Row 0: Setup Controls (Images, Device, Kernels) ---
+        self.image_controls_frame = ttk.LabelFrame(self.row0_frame, text="Default Images"); self.image_controls_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.Y)
+        self.device_control_frame = ttk.LabelFrame(self.row0_frame, text="Device Control"); self.device_control_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.Y)
+        self.presets_frame = ttk.LabelFrame(self.row0_frame, text="Preset Kernels (Unitless)"); self.presets_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
+
+        # Populate Image Controls
+        top_row_controls = ttk.Frame(self.image_controls_frame); top_row_controls.pack(side=tk.TOP, fill=tk.X, padx=2, pady=(2, 4))
+        self.load_image_button = ttk.Button(top_row_controls, text="Load File...", command=self.load_image); self.load_image_button.pack(side=tk.LEFT, padx=2)
+        self.default_vert_line_button = ttk.Button(top_row_controls, text="Vert L", command=self.load_default_vertical_line); self.default_vert_line_button.pack(side=tk.LEFT, padx=2)
+        self.default_horiz_line_button = ttk.Button(top_row_controls, text="Horiz L", command=self.load_default_horizontal_line); self.default_horiz_line_button.pack(side=tk.LEFT, padx=2)
+        self.default_dot_button = ttk.Button(top_row_controls, text="Dot", command=self.load_default_center_dot); self.default_dot_button.pack(side=tk.LEFT, padx=2)
+        bottom_row_controls = ttk.Frame(self.image_controls_frame); bottom_row_controls.pack(side=tk.TOP, fill=tk.X, padx=2, pady=2)
+        letter_frame = ttk.Frame(bottom_row_controls); letter_frame.pack(side=tk.LEFT, padx=0)
+        ttk.Label(letter_frame, text="ZX Font:").pack(side=tk.LEFT, padx=(0,2))
+        self.letter_combobox = ttk.Combobox(letter_frame, width=4, state="readonly", values=sorted(list(ZX_SPECTRUM_FONT.keys()))); self.letter_combobox.pack(side=tk.LEFT, padx=2); self.letter_combobox.set("A")
+        self.load_letter_button = ttk.Button(letter_frame, text="Load", width=5, command=lambda: self._load_zx_spectrum_char(self.letter_combobox.get())); self.load_letter_button.pack(side=tk.LEFT, padx=2)
+        icon_frame = ttk.Frame(bottom_row_controls); icon_frame.pack(side=tk.LEFT, padx=5)
+        ttk.Label(icon_frame, text="Icons:").pack(side=tk.LEFT, padx=(5,2))
+        self.eye_button = ttk.Button(icon_frame, text="Eye", width=5, command=self.load_default_eye); self.eye_button.pack(side=tk.LEFT, padx=2)
+        self.sword_button = ttk.Button(icon_frame, text="Sword", width=5, command=self.load_default_sword); self.sword_button.pack(side=tk.LEFT, padx=2)
+        self.blitz_button = ttk.Button(icon_frame, text="Blitz", width=5, command=self.load_default_blitz); self.blitz_button.pack(side=tk.LEFT, padx=2)
+
+        # Populate Device Control
+        ttk.Label(self.device_control_frame, text="Optical Power (ND):").pack(pady=(5,2))
+        self.power_combobox = ttk.Combobox(self.device_control_frame, state="readonly", width=12)
+        self.power_combobox.pack(pady=(0,5), padx=5)
+        self.power_combobox.bind("<<ComboboxSelected>>", self.on_power_selected)
+        gamma_val = 2.2 if cfg.dynamic_mode_use_gamma_correction else 1.0
+        ttk.Label(self.device_control_frame, text=f"Dyn. Gamma: {gamma_val:.1f}").pack(pady=(0, 5))
+
+        # Populate Preset Kernels
+        for idx, kernel_name in enumerate(ALL_PRESET_KERNELS.keys()):
+            btn = ttk.Button(self.presets_frame, text=kernel_name, width=12, command=lambda kn=kernel_name: self.apply_preset_kernel(kn))
+            btn.grid(row=idx // 3, column=idx % 3, padx=1, pady=1, sticky="ew")
+
+        # --- Row 1: Kernel Config and Plotting Tools ---
+        self.kernel_config_frame = ttk.LabelFrame(self.row1_frame, text="Kernel Cell Config"); self.kernel_config_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.Y, anchor='n')
+        self.plotting_tools_frame = ttk.LabelFrame(self.row1_frame, text="Plotting Tools"); self.plotting_tools_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.Y, anchor='n')
+        self.kernel_display_frame = ttk.Frame(self.row1_frame); self.kernel_display_frame.pack(side=tk.LEFT, padx=10, pady=5, fill=tk.BOTH, expand=True, anchor='n')
+
+        # Populate Kernel Config
+        for r_idx in range(3):
+            for c_idx in range(3):
+                cell_frame = ttk.Frame(self.kernel_config_frame, borderwidth=1, relief="sunken", padding=3); cell_frame.grid(row=r_idx, column=c_idx, padx=2, pady=2, sticky="nsew")
+                ttk.Label(cell_frame, text=f"W (P{r_idx}{c_idx}):").grid(row=0, column=0, sticky=tk.W)
+                desired_w_entry = ttk.Entry(cell_frame, width=8); desired_w_entry.insert(0, "0.0"); desired_w_entry.grid(row=0, column=1, sticky=tk.EW, padx=2)
+                desired_w_entry.bind("<KeyRelease>", self.handle_manual_weight_entry)
+                found_vtg_label = ttk.Label(cell_frame, text="V_TG: N/A", width=20); found_vtg_label.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=(1,0))
+                effective_nd_label = ttk.Label(cell_frame, text="Eff. ND: N/A", width=20); effective_nd_label.grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=(1,0))
+                actual_iph_label = ttk.Label(cell_frame, text="I_ph: N/A", width=20); actual_iph_label.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(1,0))
+                kernel_cells[r_idx,c_idx] = {'desired_w_entry': desired_w_entry, 'found_vtg_label': found_vtg_label, 'effective_nd_label': effective_nd_label, 'actual_iph_label': actual_iph_label}
+        self.update_kernel_button = ttk.Button(self.kernel_config_frame, text="Update/Optimize", command=self.update_all_kernel_cells_from_desired_weights); self.update_kernel_button.grid(row=4, column=0, columnspan=3, pady=5)
+        
+        # Populate Plotting Tools
+        pixel_select_frame = ttk.Frame(self.plotting_tools_frame)
+        pixel_select_frame.pack(pady=5, padx=5)
+        ttk.Label(pixel_select_frame, text="Pixel X:").pack(side=tk.LEFT)
+        self.pixel_x_entry = ttk.Entry(pixel_select_frame, width=4)
+        self.pixel_x_entry.pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(pixel_select_frame, text="Y:").pack(side=tk.LEFT)
+        self.pixel_y_entry = ttk.Entry(pixel_select_frame, width=4)
+        self.pixel_y_entry.pack(side=tk.LEFT)
+        self.plot_response_button = ttk.Button(self.plotting_tools_frame, text="Plot Dynamic Response", command=self.plot_dynamic_response, state=tk.DISABLED)
+        self.plot_response_button.pack(pady=5, padx=5, fill=tk.X)
+        self.plot_char_surface_button = ttk.Button(self.plotting_tools_frame, text="Plot I-V-ND Surface", command=self.plot_characterization_surface)
+        self.plot_char_surface_button.pack(pady=5, padx=5, fill=tk.X)
+        self.plot_ratio_button = ttk.Button(self.plotting_tools_frame, text="Plot Stability Ratios", command=self.plot_stability_ratios)
+        self.plot_ratio_button.pack(pady=5, padx=5, fill=tk.X)
+        ratio_range_frame = ttk.Frame(self.plotting_tools_frame)
+        ratio_range_frame.pack(pady=5, padx=5, fill=tk.X)
+        ttk.Label(ratio_range_frame, text="V_tg Range:").pack(side=tk.LEFT)
+        self.vtg_min_entry = ttk.Entry(ratio_range_frame, width=5)
+        self.vtg_min_entry.insert(0, "1.0")
+        self.vtg_min_entry.pack(side=tk.LEFT, padx=(2,0))
+        ttk.Label(ratio_range_frame, text="to").pack(side=tk.LEFT, padx=2)
+        self.vtg_max_entry = ttk.Entry(ratio_range_frame, width=5)
+        self.vtg_max_entry.insert(0, "4.0")
+        self.vtg_max_entry.pack(side=tk.LEFT, padx=(0,2))
+
+        # Populate Kernel Display
+        ttk.Label(self.kernel_display_frame, text="Kernel Gate Voltages (V_TG) [V]").pack()
+        self.kernel_fig, self.kernel_ax = plt.subplots(figsize=(2.2, 2.2)); self.kernel_canvas_widget = FigureCanvasTkAgg(self.kernel_fig, master=self.kernel_display_frame); self.kernel_canvas_widget.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        # --- Row 2: Action Controls (Convolution, Saving) ---
+        self.conv_control_outer_frame = ttk.LabelFrame(self.row2_frame, text="Convolution Control"); self.conv_control_outer_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.Y)
+        self.saving_frame = ttk.LabelFrame(self.row2_frame, text="File Saving"); self.saving_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.Y)
+        
+        # Populate Convolution Control
+        conv_control_frame_top = ttk.Frame(self.conv_control_outer_frame); conv_control_frame_top.pack(fill=tk.X, expand=True, pady=(5, 2), padx=5)
+        conv_control_frame_bottom = ttk.Frame(self.conv_control_outer_frame); conv_control_frame_bottom.pack(fill=tk.X, expand=True, pady=(2, 5), padx=5)
+        self.convolve_full_button = ttk.Button(conv_control_frame_top, text="Convolve Full Image", command=self.convolve_full_image_and_display); self.convolve_full_button.pack(side=tk.LEFT, padx=5)
+        self.reset_step_button = ttk.Button(conv_control_frame_top, text="Start/Reset Step-by-Step", command=self.start_reset_step_by_step); self.reset_step_button.pack(side=tk.LEFT, padx=5)
+        self.next_step_button = ttk.Button(conv_control_frame_top, text="Next Step", command=self.perform_one_convolution_step, state=tk.DISABLED); self.next_step_button.pack(side=tk.LEFT, padx=5)
+        self.five_steps_button = ttk.Button(conv_control_frame_top, text="5 Steps", command=lambda: self.perform_n_convolution_steps(5), state=tk.DISABLED); self.five_steps_button.pack(side=tk.LEFT, padx=5)
+        self.finish_steps_button = ttk.Button(conv_control_frame_top, text="Finish Steps", command=self.finish_all_convolution_steps, state=tk.DISABLED); self.finish_steps_button.pack(side=tk.LEFT, padx=5)
+        self.plot_3d_button = ttk.Button(conv_control_frame_bottom, text="Show 3D Plot", command=self.plot_output_in_3d, state=tk.DISABLED); self.plot_3d_button.pack(side=tk.LEFT, padx=5)
+        compare_frame = ttk.Frame(conv_control_frame_bottom)
+        compare_frame.pack(side=tk.LEFT, padx=5)
+        self.compare_button = ttk.Button(compare_frame, text="Compare Modes...", command=self.run_comparison_workflow)
+        self.compare_button.pack(side=tk.LEFT)
+        self.show_plots_checkbox = ttk.Checkbutton(compare_frame, text="Show Plots", variable=self.show_plots_var)
+        self.show_plots_checkbox.pack(side=tk.LEFT, padx=(5, 0))
+        vis_controls_frame = ttk.Frame(conv_control_frame_bottom); vis_controls_frame.pack(side=tk.RIGHT, padx=10)
+        ttk.Label(vis_controls_frame, text="Output Style:").pack(side=tk.LEFT)
+        self.vis_mode_combo = ttk.Combobox(vis_controls_frame, values=["Grayscale", "Bipolar (RdBu)", "Zero Crossings"], state="readonly", width=15); self.vis_mode_combo.pack(side=tk.LEFT)
+        self.vis_mode_combo.bind("<<ComboboxSelected>>", lambda e: self.display_convolved_image())
+
+        # Populate Saving Frame
+        self.save_csv_button = ttk.Button(self.saving_frame, text="Save CSV...", command=self.save_output_to_csv, state=tk.DISABLED)
+        self.save_csv_button.pack(pady=5, padx=5, fill=tk.X)
+        self.save_image_button = ttk.Button(self.saving_frame, text="Save PNG...", command=self.save_output_to_png, state=tk.DISABLED)
+        self.save_image_button.pack(pady=5, padx=5, fill=tk.X)
+
+        # --- Bottom Row: Display Panels ---
         self.input_display_frame = ttk.Frame(self.bottom_row_frame)
         ttk.Label(self.input_display_frame, text="Input Image").pack()
         self.input_fig = Figure(figsize=(4, 4), dpi=100)
@@ -195,77 +318,13 @@ class ConvolutionApp:
         self.convolution_step_text = tk.Text(self.animation_frame, height=20, width=60, wrap=tk.WORD, font=self.detail_font, relief="sunken", borderwidth=1)
         self.convolution_step_text.insert(tk.END, "Initializing..."); self.convolution_step_text.config(state=tk.DISABLED)
 
-        # Pack them after creation
+        # Pack Bottom Row
         self.input_display_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
         self.input_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.output_display_frame.pack(side=tk.LEFT, padx=10, pady=5, fill=tk.BOTH, expand=True)
         self.output_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.animation_frame.pack(side=tk.RIGHT, padx=10, pady=5, fill=tk.Y, expand=False)
         self.convolution_step_text.pack(pady=5, padx=5, fill=tk.BOTH, expand=True)
-        # --- End Display Panel Creation ---
-
-        # --- Row 0: Image Loading, Device Control, Presets ---
-        self.image_controls_frame = ttk.LabelFrame(self.row0_frame, text="Default Images"); self.image_controls_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.NONE)
-        top_row_controls = ttk.Frame(self.image_controls_frame); top_row_controls.pack(side=tk.TOP, fill=tk.X, padx=2, pady=(2, 4))
-        self.load_image_button = ttk.Button(top_row_controls, text="Load File...", command=self.load_image); self.load_image_button.pack(side=tk.LEFT, padx=2)
-        self.default_vert_line_button = ttk.Button(top_row_controls, text="Vert L", command=self.load_default_vertical_line); self.default_vert_line_button.pack(side=tk.LEFT, padx=2)
-        self.default_horiz_line_button = ttk.Button(top_row_controls, text="Horiz L", command=self.load_default_horizontal_line); self.default_horiz_line_button.pack(side=tk.LEFT, padx=2)
-        self.default_dot_button = ttk.Button(top_row_controls, text="Dot", command=self.load_default_center_dot); self.default_dot_button.pack(side=tk.LEFT, padx=2)
-        bottom_row_controls = ttk.Frame(self.image_controls_frame); bottom_row_controls.pack(side=tk.TOP, fill=tk.X, padx=2, pady=2)
-        letter_frame = ttk.Frame(bottom_row_controls); letter_frame.pack(side=tk.LEFT, padx=0)
-        ttk.Label(letter_frame, text="ZX Font:").pack(side=tk.LEFT, padx=(0,2))
-        self.letter_combobox = ttk.Combobox(letter_frame, width=4, state="readonly", values=sorted(list(ZX_SPECTRUM_FONT.keys()))); self.letter_combobox.pack(side=tk.LEFT, padx=2); self.letter_combobox.set("A")
-        self.load_letter_button = ttk.Button(letter_frame, text="Load", width=5, command=lambda: self._load_zx_spectrum_char(self.letter_combobox.get())); self.load_letter_button.pack(side=tk.LEFT, padx=2)
-        icon_frame = ttk.Frame(bottom_row_controls); icon_frame.pack(side=tk.LEFT, padx=5)
-        ttk.Label(icon_frame, text="Icons:").pack(side=tk.LEFT, padx=(5,2))
-        self.eye_button = ttk.Button(icon_frame, text="Eye", width=5, command=self.load_default_eye); self.eye_button.pack(side=tk.LEFT, padx=2)
-        self.sword_button = ttk.Button(icon_frame, text="Sword", width=5, command=self.load_default_sword); self.sword_button.pack(side=tk.LEFT, padx=2)
-        self.blitz_button = ttk.Button(icon_frame, text="Blitz", width=5, command=self.load_default_blitz); self.blitz_button.pack(side=tk.LEFT, padx=2)
-        self.power_frame = ttk.LabelFrame(self.row0_frame, text="Device Control"); self.power_frame.pack(side=tk.LEFT, padx=10, pady=5, fill=tk.Y)
-        ttk.Label(self.power_frame, text="Optical Power (ND):").pack(pady=(5,2))
-        self.power_combobox = ttk.Combobox(self.power_frame, state="readonly", width=12); self.power_combobox.pack(pady=(0,5), padx=5); self.power_combobox.bind("<<ComboboxSelected>>", self.on_power_selected)
-        self.presets_frame = ttk.LabelFrame(self.row0_frame, text="Preset Kernels (Unitless)"); self.presets_frame.pack(side=tk.LEFT, padx=10, pady=5, fill=tk.X, expand=True)
-        for idx, kernel_name in enumerate(ALL_PRESET_KERNELS.keys()): btn = ttk.Button(self.presets_frame, text=kernel_name, width=12, command=lambda kn=kernel_name: self.apply_preset_kernel(kn)); btn.grid(row=idx // 3, column=idx % 3, padx=1, pady=1, sticky="ew")
-        
-        # --- Row 1: Kernel Configuration and Visualization ---
-        self.kernel_config_frame = ttk.LabelFrame(self.row1_frame, text="Kernel Cell Config"); self.kernel_config_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.Y, anchor='n')
-        for r_idx in range(3):
-            for c_idx in range(3):
-                cell_frame = ttk.Frame(self.kernel_config_frame, borderwidth=1, relief="sunken", padding=3); cell_frame.grid(row=r_idx, column=c_idx, padx=2, pady=2, sticky="nsew")
-                ttk.Label(cell_frame, text=f"W (P{r_idx}{c_idx}):").grid(row=0, column=0, sticky=tk.W)
-                desired_w_entry = ttk.Entry(cell_frame, width=8); desired_w_entry.insert(0, "0.0"); desired_w_entry.grid(row=0, column=1, sticky=tk.EW, padx=2)
-                desired_w_entry.bind("<KeyRelease>", self.handle_manual_weight_entry)
-                found_vtg_label = ttk.Label(cell_frame, text="V_TG: N/A", width=20); found_vtg_label.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=(1,0))
-                effective_nd_label = ttk.Label(cell_frame, text="Eff. ND: N/A", width=20); effective_nd_label.grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=(1,0))
-                actual_iph_label = ttk.Label(cell_frame, text="I_ph: N/A", width=20); actual_iph_label.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(1,0))
-                kernel_cells[r_idx,c_idx] = {'desired_w_entry': desired_w_entry, 'found_vtg_label': found_vtg_label, 'effective_nd_label': effective_nd_label, 'actual_iph_label': actual_iph_label}
-        self.update_kernel_button = ttk.Button(self.kernel_config_frame, text="Update/Optimize", command=self.update_all_kernel_cells_from_desired_weights); self.update_kernel_button.grid(row=4, column=0, columnspan=3, pady=5)
-        self.kernel_display_frame = ttk.Frame(self.row1_frame); self.kernel_display_frame.pack(side=tk.LEFT, padx=10, pady=5, fill=tk.BOTH, expand=True, anchor='n')
-        ttk.Label(self.kernel_display_frame, text="Kernel Gate Voltages (V_TG) [V]").pack()
-        self.kernel_fig, self.kernel_ax = plt.subplots(figsize=(2.2, 2.2)); self.kernel_canvas_widget = FigureCanvasTkAgg(self.kernel_fig, master=self.kernel_display_frame); self.kernel_canvas_widget.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        
-        # --- Convolution Control Frame ---
-        conv_control_frame_top = ttk.Frame(self.conv_control_outer_frame); conv_control_frame_top.pack(fill=tk.X, expand=True, pady=(5, 2), padx=5)
-        conv_control_frame_bottom = ttk.Frame(self.conv_control_outer_frame); conv_control_frame_bottom.pack(fill=tk.X, expand=True, pady=(2, 5), padx=5)
-        self.convolve_full_button = ttk.Button(conv_control_frame_top, text="Convolve Full Image", command=self.convolve_full_image_and_display); self.convolve_full_button.pack(side=tk.LEFT, padx=5)
-        self.reset_step_button = ttk.Button(conv_control_frame_top, text="Start/Reset Step-by-Step", command=self.start_reset_step_by_step); self.reset_step_button.pack(side=tk.LEFT, padx=5)
-        self.next_step_button = ttk.Button(conv_control_frame_top, text="Next Step", command=self.perform_one_convolution_step, state=tk.DISABLED); self.next_step_button.pack(side=tk.LEFT, padx=5)
-        self.five_steps_button = ttk.Button(conv_control_frame_top, text="5 Steps", command=lambda: self.perform_n_convolution_steps(5), state=tk.DISABLED); self.five_steps_button.pack(side=tk.LEFT, padx=5)
-        self.finish_steps_button = ttk.Button(conv_control_frame_top, text="Finish Steps", command=self.finish_all_convolution_steps, state=tk.DISABLED); self.finish_steps_button.pack(side=tk.LEFT, padx=5)
-        self.plot_response_button = ttk.Button(conv_control_frame_bottom, text="Plot Dynamic Response", command=self.plot_dynamic_response, state=tk.DISABLED); self.plot_response_button.pack(side=tk.LEFT, padx=5)
-        self.save_csv_button = ttk.Button(conv_control_frame_bottom, text="Save CSV...", command=self.save_output_to_csv, state=tk.DISABLED); self.save_csv_button.pack(side=tk.LEFT, padx=5)
-        self.save_image_button = ttk.Button(conv_control_frame_bottom, text="Save PNG...", command=self.save_output_to_png, state=tk.DISABLED); self.save_image_button.pack(side=tk.LEFT, padx=5)
-        self.plot_3d_button = ttk.Button(conv_control_frame_bottom, text="Show 3D Plot", command=self.plot_output_in_3d, state=tk.DISABLED); self.plot_3d_button.pack(side=tk.LEFT, padx=5)
-        compare_frame = ttk.Frame(conv_control_frame_bottom)
-        compare_frame.pack(side=tk.LEFT, padx=5)
-        self.compare_button = ttk.Button(compare_frame, text="Compare Modes...", command=self.run_comparison_workflow)
-        self.compare_button.pack(side=tk.LEFT)
-        self.show_plots_checkbox = ttk.Checkbutton(compare_frame, text="Show Plots", variable=self.show_plots_var)
-        self.show_plots_checkbox.pack(side=tk.LEFT, padx=(5, 0))
-        vis_controls_frame = ttk.Frame(conv_control_frame_bottom); vis_controls_frame.pack(side=tk.RIGHT, padx=10)
-        ttk.Label(vis_controls_frame, text="Output Style:").pack(side=tk.LEFT)
-        self.vis_mode_combo = ttk.Combobox(vis_controls_frame, values=["Grayscale", "Bipolar (RdBu)"], state="readonly", width=15); self.vis_mode_combo.pack(side=tk.LEFT)
-        self.vis_mode_combo.bind("<<ComboboxSelected>>", lambda e: self.display_convolved_image())
 
     def on_power_selected(self, event=None): 
         self.master.title(f"Phototransistor Kernel Simulator ({self.power_combobox.get()})")
@@ -540,17 +599,88 @@ class ConvolutionApp:
         if current_conv_r >= img_height: convolution_active = False
         self.update_step_button_state()
 
+    def _create_zero_crossing_image(self, raw_data: np.ndarray) -> np.ndarray:
+        """
+        Creates a binary image highlighting zero-crossings in the raw data.
+        A crossing is marked if adjacent pixels have different signs.
+        This correctly handles transitions to/from zero.
+        """
+        if raw_data is None or raw_data.size == 0:
+            return np.zeros((1, 1), dtype=np.uint8)
+
+        # Use a small tolerance for floating point comparisons
+        tolerance = 1e-12
+
+        # A pixel's "sign" is determined by whether it's positive or not.
+        # This means zero and negative values are grouped together.
+        is_positive = raw_data > tolerance
+
+        # A crossing occurs if the 'is_positive' status flips.
+        # This correctly handles [pos, neg], [pos, zero], [neg, pos], and [zero, pos].
+        horizontal_crossings_pos = np.logical_xor(is_positive[:, :-1], is_positive[:, 1:])
+        vertical_crossings_pos = np.logical_xor(is_positive[:-1, :], is_positive[1:, :])
+
+        # To catch the missing cases ([neg, zero] and [zero, neg]), we do the same
+        # check for whether a pixel is negative or not.
+        is_negative = raw_data < -tolerance
+        horizontal_crossings_neg = np.logical_xor(is_negative[:, :-1], is_negative[:, 1:])
+        vertical_crossings_neg = np.logical_xor(is_negative[:-1, :], is_negative[1:, :])
+
+        # A final crossing map is the union (OR) of both types of crossings.
+        final_horizontal = np.logical_or(horizontal_crossings_pos, horizontal_crossings_neg)
+        final_vertical = np.logical_or(vertical_crossings_pos, vertical_crossings_neg)
+
+        # Initialize the output image and apply the crossings
+        zero_crossings_mask = np.zeros_like(raw_data, dtype=bool)
+        zero_crossings_mask[:, :-1] |= final_horizontal
+        zero_crossings_mask[:-1, :] |= final_vertical
+
+        # Convert the boolean mask to a displayable image (0 for black, 255 for white)
+        return (zero_crossings_mask * 255).astype(np.uint8)
+
 
     # --- GUI Update and Display Methods ---
     
     def update_kernel_display(self, voltages_to_display):
         self.kernel_ax.clear()
+
+        # Revert the figure background to its default for a clean look
+        default_bg = plt.rcParams['figure.facecolor']
+        self.kernel_fig.set_facecolor(default_bg)
+        self.kernel_ax.set_facecolor(default_bg)
+
         if voltages_to_display is not None:
             abs_max = np.max(np.abs(voltages_to_display)) if voltages_to_display.size > 0 else 1.0
             if abs_max < 1e-9: abs_max = 1.0
-            self.kernel_ax.matshow(voltages_to_display, cmap='RdBu_r', vmin=-abs_max, vmax=abs_max)
-            for i, j in np.ndindex(3, 3): self.kernel_ax.text(j, i, f"{voltages_to_display[i, j]:.2f} V", ha="center", va="center", color="black", fontsize=9)
-        self.kernel_ax.set_xticks([]); self.kernel_ax.set_yticks([])
+            
+            # 1. Define the colormap and the normalization range
+            cmap = plt.get_cmap('RdBu_r')  # Using the Red-Blue colormap as requested
+            norm = plt.Normalize(vmin=-abs_max, vmax=abs_max)
+
+            # 2. Draw the background matrix using the first line you provided
+            self.kernel_ax.matshow(voltages_to_display, cmap=cmap, norm=norm)
+            
+            # 3. Loop through each cell to set the adaptive text color
+            for i, j in np.ndindex(3, 3):
+                value = voltages_to_display[i, j]
+                
+                # Get the RGBA background color of the cell from the colormap
+                bg_color = cmap(norm(value))
+                
+                # Calculate the perceived brightness (luminance) of the background
+                # This is a standard formula for converting RGB to brightness
+                luminance = 0.299 * bg_color[0] + 0.587 * bg_color[1] + 0.114 * bg_color[2]
+                
+                # If the background is dark (luminance < 0.5), use white text.
+                # If the background is light, use black text.
+                text_color = 'white' if luminance < 0.5 else 'black'
+                
+                # This is the second line you provided, now with the adaptive `text_color`
+                self.kernel_ax.text(j, i, f"{value:.2f} V",
+                                    ha="center", va="center", color=text_color, fontsize=9)
+
+        self.kernel_ax.set_xticks([])
+        self.kernel_ax.set_yticks([])
         self.kernel_canvas_widget.draw()
 
     def plot_dynamic_response(self):
@@ -586,6 +716,227 @@ class ConvolutionApp:
         axes[0,0].yaxis.set_major_formatter(plt.matplotlib.ticker.ScalarFormatter(useMathText=True)); axes[0,0].ticklabel_format(axis='y', style='sci', scilimits=(0,0))
         fig.tight_layout(rect=[0.03, 0.03, 1, 0.95])
         canvas = FigureCanvasTkAgg(fig, master=plot_window); canvas.draw(); canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+    
+    def _get_selected_pixel_char(self):
+        """
+        Reads pixel coordinates from GUI, validates them, and returns the
+        corresponding characterization data. Handles all error messages.
+        Returns a tuple (char_data, pixel_coord) or None on failure.
+        """
+        if not self.full_char_data:
+            self.update_step_text("Error: Characterization data not loaded.")
+            return None
+        try:
+            pixel_x = int(self.pixel_x_entry.get())
+            pixel_y = int(self.pixel_y_entry.get())
+        except ValueError:
+            self.update_step_text("Error: Invalid pixel coordinates. Please enter integers.")
+            return None
+
+        pixel_coord = (pixel_x, pixel_y)
+        char_data = self.full_char_data.get(pixel_coord)
+
+        if char_data is None:
+            # Provide helpful info on available pixels
+            available_keys = list(self.full_char_data.keys())
+            self.update_step_text(f"Error: No data for pixel {pixel_coord}.\n"
+                                  f"Available pixels are: {available_keys[:5]}...")
+            return None
+            
+        return char_data, pixel_coord
+
+    def plot_characterization_surface(self):
+        """
+        Generates a 3D surface plot for the USER-SELECTED pixel using a
+        manual symmetric natural logarithmic transformation.
+        """        
+        # Use the helper function to get the selected pixel's data
+        result = self._get_selected_pixel_char()
+        if result is None:
+            return  # Error message was already shown by the helper
+        center_char, center_pixel_coord = result
+
+        # Filter out unwanted ND levels before plotting
+        i_ph_df = center_char.i_ph_vs_nd.copy()
+        if 6.0 in i_ph_df.columns:
+            i_ph_df = i_ph_df.drop(columns=[6.0])
+            log.info("Filtered out ND=6.0 from the 3D surface plot.")
+        
+        v_tg_axis = i_ph_df.index.to_numpy()
+        i_ph_data = i_ph_df.to_numpy()
+
+        # Create meshgrid for surface plot
+        nd_axis_plot = i_ph_df.columns.to_numpy(dtype=float)
+        ND, V_TG = np.meshgrid(nd_axis_plot, v_tg_axis)
+        I_PH = i_ph_data
+
+        # Manual Symmetric Log Transformation of Z-data
+        linthresh = 1e-9 
+        I_PH_TRANSFORMED = np.sign(I_PH) * np.log1p(np.abs(I_PH) / linthresh)
+
+        # Valley Trace Calculation
+        nd_valley_points, vtg_valley_points, iph_valley_points = [], [], []
+        for nd_level in i_ph_df.columns:
+            currents_for_this_nd = i_ph_df[nd_level].to_numpy()
+            min_abs_current_idx = np.argmin(np.abs(currents_for_this_nd))
+            vtg_at_min = v_tg_axis[min_abs_current_idx]
+            iph_at_min = currents_for_this_nd[min_abs_current_idx]
+            nd_valley_points.append(nd_level)
+            vtg_valley_points.append(vtg_at_min)
+            iph_valley_points.append(iph_at_min)
+        
+        iph_valley_transformed = np.sign(iph_valley_points) * np.log1p(np.abs(iph_valley_points) / linthresh)
+
+        # Create the plot in a new window
+        plot_window = tk.Toplevel(self.master)
+        plot_window.title(f"Characterization Surface for Pixel {center_pixel_coord}")
+        plot_window.geometry("900x800")
+
+        fig = Figure(figsize=(9, 8), dpi=100)
+        ax = fig.add_subplot(111, projection='3d')
+        
+        surf = ax.plot_surface(ND, V_TG, I_PH_TRANSFORMED, cmap='viridis', edgecolor='none', alpha=0.8)
+        
+        ax.set_xlabel("Optical Power (ND Filter Level)")
+        ax.set_ylabel("Gate Voltage (V_tg) [V]")
+        ax.set_zlabel(f"Transformed Current\n(sign(I) * ln(1+|I|/{linthresh:.0e}))")
+        ax.set_title(f"Device Response Surface - Pixel {center_pixel_coord}", pad=20)
+        
+        cbar = fig.colorbar(surf, shrink=0.5, aspect=10, pad=0.1)
+        cbar.set_label("Transformed Current Value")
+
+        if nd_valley_points:
+            ax.plot(nd_valley_points, vtg_valley_points, iph_valley_transformed, 
+                    color='r', linewidth=3, marker='o', markersize=6, zorder=10, 
+                    label='Valley Trace (Min |I_ph|)')
+            ax.legend()
+        
+        fig.tight_layout()
+
+        canvas = FigureCanvasTkAgg(fig, master=plot_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def plot_stability_ratios(self):
+        """
+        Generates a 2D plot of current ratios and, on a secondary y-axis,
+        plots the normalized shape of the ND=2.0 photocurrent curve for context.
+        """
+        import numpy as np
+        import itertools
+
+        # Use the helper function to get the selected pixel's data
+        result = self._get_selected_pixel_char()
+        if result is None:
+            return  # Error message was already shown by the helper
+        center_char, center_pixel_coord = result
+            
+        i_ph_df = center_char.i_ph_vs_nd.copy()
+        v_tg_axis = i_ph_df.index.to_numpy()
+        
+        # Define the ND levels to compare.
+        nd_levels_to_compare = [nd for nd in [2.0, 3.0, 4.0] if nd in i_ph_df.columns]
+
+        if len(nd_levels_to_compare) < 2:
+            self.update_step_text("Not enough ND levels available for comparison.")
+            return
+
+        # Get voltage range from GUI entries
+        try:
+            vtg_min = float(self.vtg_min_entry.get())
+            vtg_max = float(self.vtg_max_entry.get())
+            if vtg_min >= vtg_max:
+                raise ValueError("Min voltage must be less than max voltage.")
+        except ValueError as e:
+            self.update_step_text(f"Invalid V_tg range: {e}")
+            return
+
+        # Create the plot in a new window
+        plot_window = tk.Toplevel(self.master)
+        plot_window.title(f"Photocurrent Stability Ratios for Pixel {center_pixel_coord}")
+        plot_window.geometry("900x700")
+
+        fig = Figure(figsize=(9, 7), dpi=100)
+        ax = fig.add_subplot(111)
+
+        # Manually track Y-axis limits for the ratio curves (left axis)
+        y_min_in_range = float('inf')
+        y_max_in_range = float('-inf')
+
+        voltage_mask = (v_tg_axis >= vtg_min) & (v_tg_axis <= vtg_max)
+        if not np.any(voltage_mask):
+            self.update_step_text("The selected V_tg range contains no data points.")
+            plot_window.destroy()
+            return
+
+        # Plot Ratio Curves (on the primary left Y-axis)
+        for nd_a, nd_b in itertools.combinations(nd_levels_to_compare, 2):
+            i_numerator = i_ph_df[nd_a].to_numpy()
+            i_denominator = i_ph_df[nd_b].to_numpy()
+
+            with np.errstate(divide='ignore', invalid='ignore'):
+                ratio = np.abs(i_numerator) / (np.abs(i_denominator) + 1e-12)
+                ratio[np.isnan(ratio)] = 0
+            
+            visible_ratios = ratio[voltage_mask]
+            if visible_ratios.size > 0:
+                y_min_in_range = min(y_min_in_range, np.min(visible_ratios))
+                y_max_in_range = max(y_max_in_range, np.max(visible_ratios))
+            
+            ax.plot(v_tg_axis, ratio, label=f'|I(ND={nd_a})| / |I(ND={nd_b})|')
+
+        # --- NEW: Plot Normalized ND=2.0 Current on a Secondary Y-axis ---
+        if 2.0 in i_ph_df.columns:
+            # Create the secondary axis, sharing the same x-axis
+            ax2 = ax.twinx()
+            
+            i_nd2 = i_ph_df[2.0].to_numpy()
+            # Normalize the absolute current to a [0, 1] range for shape comparison
+            i_nd2_normalized = np.abs(i_nd2) / (np.max(np.abs(i_nd2)) + 1e-12)
+            
+            ax2.plot(v_tg_axis, i_nd2_normalized, color='black', linestyle='--', 
+                     linewidth=2.5, alpha=0.5, label='Norm. |I(ND=2.0)| Shape')
+            
+            # Set label for the secondary axis and customize its color
+            ax2.set_ylabel("Normalized Current Shape", color='gray')
+            ax2.tick_params(axis='y', labelcolor='gray')
+            # Set the limits for the normalized axis
+            ax2.set_ylim(-0.05, 1.05)
+        # --- End of Secondary Axis Plot ---
+
+        # Formatting the primary plot (left axis)
+        ax.set_xlabel("Gate Voltage (V_tg) [V]")
+        ax.set_ylabel("Absolute Photocurrent Ratio", color='C0') # Use a color to distinguish
+        ax.tick_params(axis='y', labelcolor='C0')
+        ax.set_title(f"Response Stability vs. Gate Voltage for Pixel {center_pixel_coord}")
+        ax.grid(True, linestyle='--', alpha=0.6)
+        
+        # Set the x-axis limits based on user input
+        ax.set_xlim(vtg_min, vtg_max)
+
+        # Set the calculated Y-axis limits for the ratio plot
+        if np.isfinite(y_min_in_range) and np.isfinite(y_max_in_range):
+            padding = (y_max_in_range - y_min_in_range) * 0.05
+            if padding < 1e-9: padding = 0.1 
+            ax.set_ylim(y_min_in_range - padding, y_max_in_range + padding)
+
+        # Combine legends from both axes into one
+        lines, labels = ax.get_legend_handles_labels()
+        if 'ax2' in locals(): # Check if the secondary axis was created
+            lines2, labels2 = ax2.get_legend_handles_labels()
+            lines.extend(lines2)
+            labels.extend(labels2)
+        # Add the ideal ratio line last so it's on top in the legend
+        ideal_line = ax.axhline(y=1.0, color='r', linestyle=':', linewidth=2, label='Ideal Ratio (y=1.0)')
+        lines.append(ideal_line)
+        labels.append(ideal_line.get_label())
+        
+        ax.legend(lines, labels)
+        fig.tight_layout() # Adjust layout to make room for the second y-axis
+
+        canvas = FigureCanvasTkAgg(fig, master=plot_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     def update_step_button_state(self):
         is_ready = (fixed_optimal_voltages is not None and not np.all(fixed_optimal_voltages==0)) if self.is_in_dynamic_mode() else (current_kernel_weights is not None and not np.all(current_kernel_weights==0))
@@ -768,19 +1119,54 @@ class ConvolutionApp:
         
     def display_convolved_image(self, step_by_step=False):
         data = output_image_step_by_step_amps if step_by_step else raw_convolved_output_amps
-        if hasattr(self, 'colorbar'): self.colorbar.remove(); delattr(self, 'colorbar')
+        
+        # Clean up previous plot elements
+        if hasattr(self, 'colorbar'): 
+            self.colorbar.remove()
+            delattr(self, 'colorbar')
         self.output_ax.clear()
+
         if data is None or data.size == 0:
-            self.output_ax.set_xticks([]); self.output_ax.set_yticks([]); self.output_canvas.draw(); return
+            self.output_ax.set_xticks([]); self.output_ax.set_yticks([])
+            self.output_canvas.draw()
+            return
+            
         vis_mode = self.vis_mode_combo.get()
-        cmap = 'gray' if vis_mode == "Grayscale" else 'RdBu_r'
-        if cmap == 'RdBu_r': vabs_max = np.max(np.abs(data)); vmin, vmax = -vabs_max if vabs_max > 1e-12 else -1, vabs_max if vabs_max > 1e-12 else 1
-        else: vmin, vmax = data.min(), data.max()
-        if abs(vmax - vmin) < 1e-12: vmin, vmax = data.min() - 0.5, data.max() + 0.5
-        im = self.output_ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax, interpolation='nearest')
-        self.colorbar = self.output_fig.colorbar(im, ax=self.output_ax, fraction=0.046, pad=0.04)
-        self.colorbar.set_label("Photocurrent (A)")
-        self.output_ax.set_xticks([]); self.output_ax.set_yticks([]); self.output_fig.tight_layout(pad=0.5); self.output_canvas.draw()
+        
+        # --- Prepare data and settings based on visualization mode ---
+        if vis_mode == "Zero Crossings":
+            display_data = self._create_zero_crossing_image(data)
+            cmap = 'gray'
+            vmin, vmax = 0, 255
+            colorbar_label = "Crossing Detected"
+        elif vis_mode == "Bipolar (RdBu)":
+            display_data = data
+            cmap = 'RdBu_r'
+            vabs_max = np.max(np.abs(data))
+            vmin, vmax = -vabs_max if vabs_max > 1e-12 else -1, vabs_max if vabs_max > 1e-12 else 1
+            colorbar_label = "Photocurrent (A)"
+        else: # Default to Grayscale
+            display_data = data
+            cmap = 'gray'
+            vmin, vmax = data.min(), data.max()
+            colorbar_label = "Photocurrent (A)"
+
+        # Ensure vmin and vmax are different to avoid plotting errors
+        if abs(vmax - vmin) < 1e-12:
+            vmin, vmax = display_data.min() - 0.5, display_data.max() + 0.5
+            
+        # --- Render the image ---
+        im = self.output_ax.imshow(display_data, cmap=cmap, vmin=vmin, vmax=vmax, interpolation='nearest')
+        
+        # --- Add a colorbar, but NOT for the binary zero-crossing image ---
+        if vis_mode != "Zero Crossings":
+            self.colorbar = self.output_fig.colorbar(im, ax=self.output_ax, fraction=0.046, pad=0.04)
+            self.colorbar.set_label(colorbar_label)
+
+        self.output_ax.set_xticks([])
+        self.output_ax.set_yticks([])
+        self.output_fig.tight_layout(pad=0.5)
+        self.output_canvas.draw()
         
     def perform_n_convolution_steps(self, num_steps):
         for _ in range(num_steps):
