@@ -3,15 +3,28 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from scipy.interpolate import griddata
+from pathlib import Path
+import sys
 
 # --- Configuration ---
-data_directory_path = "250624_SlothGUI/" # <-- Update this path if needed
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+data_directory_path = os.path.join(project_root, "250624_SlothGUI/")
 FILENAME_FILTER_KEYWORD = "KernelDoublePhotoGating"
 ARRAY_ROWS = 3
 ARRAY_COLS = 3
 
 # --- Analysis Parameters ---
 decimals = 2
+UNIT_SCALE = 1e9  # To convert from Amps to microamps (µA)
+UNIT_LABEL = "nA"
+
+# --- NEW: Font Size Configuration for Plots ---
+FONT_SIZES = {
+    'title': 20,
+    'label': 18,
+    'legend': 15,
+    'ticks': 18
+}
 
 # --- Column Names (Internal Standard) ---
 gate1_col_name = "gate_voltage"
@@ -76,7 +89,7 @@ results_by_filename, all_swing_series, all_dataframes = {}, [], {}
 # =============================================================================
 # --- LOOP 1: PROCESS ALL FILES AND GATHER DATA ---
 # =============================================================================
-print("--- Processing all files to gather data and find best overall V_BG ---\n")
+print("--- Processing all files to gather data and find best overall bottom-gate voltage ---\n")
 for filename in all_csv_files:
     print(f"Processing: {filename}...")
     full_file_path = os.path.join(data_directory_path, filename)
@@ -98,7 +111,7 @@ for filename in all_csv_files:
 
     x_coord, y_coord = int(df_run[x_coord_col].iloc[0]), int(df_run[y_coord_col].iloc[0])
     df_run[gate1_col_name], df_run[gate2_col_name] = df_run[gate1_col_name].round(decimals), df_run[gate2_col_name].round(decimals)
-    df_run["iph_in_phase"] = df_run[res_mag_col] * np.cos(np.deg2rad(df_run[phase_col]))
+    df_run["iph_in_phase"] = df_run[res_mag_col] * np.cos(np.deg2rad(df_run[phase_col])) * UNIT_SCALE
 
     initial_rows = len(df_run)
     df_run = df_run.groupby([gate1_col_name, gate2_col_name]).mean().reset_index()
@@ -116,21 +129,19 @@ for filename in all_csv_files:
         print(f"  - No meaningful photocurrent swing found.")
     else:
         max_swing_vbg, max_swing_value = iph_x_range_per_vbg.idxmax(), iph_x_range_per_vbg.max()
-        print(f"  - Pixel ({x_coord}, {y_coord}): Max swing of {max_swing_value:.2e} A at V_BG = {max_swing_vbg:.{decimals}f} V")
+        print(f"  - Pixel ({x_coord}, {y_coord}): Maximum swing of {max_swing_value:.2e} A at Bottom-Gate Voltage = {max_swing_vbg:.{decimals}f} V")
 
     results_by_filename[filename] = {"x_coord": x_coord, "y_coord": y_coord, "max_range_value": max_swing_value, "max_range_vbg": max_swing_vbg, "swing_series": iph_x_range_per_vbg}
     all_swing_series.append(iph_x_range_per_vbg.rename(f"Pixel ({x_coord}, {y_coord})"))
 
-# --- Exit if no data processed ---
 if not all_dataframes: print("\nNo data was successfully processed. Exiting."); exit()
 
-# --- Combined Analysis ---
-print("\n--- Combined Analysis: Finding Best V_BG Across All Pixels ---")
+print("\n--- Combined Analysis: Finding Best Bottom-Gate Voltage Across All Pixels ---")
 combined_swings_df = pd.concat(all_swing_series, axis=1)
 mean_swing_per_vbg = combined_swings_df.mean(axis=1)
 best_overall_vbg = mean_swing_per_vbg.idxmax()
 best_mean_swing_value = mean_swing_per_vbg.max()
-print(f"Best Overall V_BG (highest average swing): {best_overall_vbg:.{decimals}f} V")
+print(f"Best Overall Bottom-Gate Voltage (highest average swing): {best_overall_vbg:.{decimals}f} V")
 
 # =============================================================================
 # --- LOOP 2: GENERATE INDIVIDUAL PLOTS ---
@@ -141,20 +152,33 @@ for filename, result in results_by_filename.items():
     print(f"-> Plotting for Pixel ({px}, {py})...")
     plt.figure(figsize=(10, 6))
     plt.plot(result['swing_series'].index, result['swing_series'].values, marker='o')
-    plt.axvline(result['max_range_vbg'], color='red', linestyle=':', lw=2, label=f'Pixel Best V_BG = {result["max_range_vbg"]:.{decimals}f} V')
-    plt.axvline(best_overall_vbg, color='green', linestyle='--', lw=2, label=f'Overall Best V_BG = {best_overall_vbg:.{decimals}f} V')
-    plt.title(f"Photocurrent Swing vs. V_BG for Pixel ({px}, {py})"); plt.xlabel("V_BG [V]"); plt.ylabel("I_ph Swing [A]")
-    plt.legend(); plt.grid(True, which='both', linestyle='--'); plt.tight_layout(); plt.show()
+    plt.axvline(result['max_range_vbg'], color='red', linestyle=':', lw=2, label=f'Pixel Best Bottom-Gate Voltage = {result["max_range_vbg"]:.{decimals}f} V')
+    plt.axvline(best_overall_vbg, color='green', linestyle='--', lw=2, label=f'Overall Best Bottom-Gate Voltage = {best_overall_vbg:.{decimals}f} V')
+    plt.title(f"Photocurrent Swing vs. Bottom-Gate Voltage for Pixel ({px}, {py})", fontsize=FONT_SIZES['title'])
+    plt.xlabel("Bottom-Gate Voltage [V]", fontsize=FONT_SIZES['label'])
+    plt.ylabel(f"Photocurrent Swing [{UNIT_LABEL}]", fontsize=FONT_SIZES['label'])
+    plt.xticks(fontsize=FONT_SIZES['ticks'])
+    plt.yticks(fontsize=FONT_SIZES['ticks'])
+    plt.legend(fontsize=FONT_SIZES['legend'])
+    plt.grid(True, which='both', linestyle='--'); plt.tight_layout()
+
     x_g, y_g, z_g = generate_heatmap_data(all_dataframes[filename], gate1_col_name, gate2_col_name, "iph_in_phase")
     if x_g is not None:
         plt.figure(figsize=(9, 7))
         abs_max = np.nanmax(np.abs(z_g))
         pcm = plt.pcolormesh(x_g, y_g, z_g, shading='auto', cmap='RdBu_r', vmin=-abs_max, vmax=abs_max)
-        plt.colorbar(pcm, label="I_ph (X) [A]")
-        plt.axvline(result['max_range_vbg'], color='red', linestyle=':', lw=2.5, label=f'Pixel Best V_BG = {result["max_range_vbg"]:.{decimals}f} V')
-        plt.axvline(best_overall_vbg, color='green', linestyle='--', lw=2.5, label=f'Overall Best V_BG = {best_overall_vbg:.{decimals}f} V')
-        plt.title(f"Photocurrent Map for Pixel ({px}, {py})"); plt.xlabel("V_BG [V]"); plt.ylabel("V_TG [V]")
-        plt.legend(); plt.tight_layout(); plt.show()
+        cbar = plt.colorbar(pcm, label="In-Phase Photocurrent [mA]")
+        cbar.ax.tick_params(labelsize=FONT_SIZES['ticks'])
+        cbar.set_label(f"In-Phase Photocurrent [{UNIT_LABEL}]", size=FONT_SIZES['label'])
+        plt.axvline(result['max_range_vbg'], color='red', linestyle=':', lw=2.5, label=f'Pixel Best Bottom-Gate Voltage = {result["max_range_vbg"]:.{decimals}f} V')
+        plt.axvline(best_overall_vbg, color='green', linestyle='--', lw=2.5, label=f'Overall Best Bottom-Gate Voltage = {best_overall_vbg:.{decimals}f} V')
+        plt.title(f"Photocurrent Map for Pixel ({px}, {py})", fontsize=FONT_SIZES['title'])
+        plt.xlabel("Bottom-Gate Voltage [V]", fontsize=FONT_SIZES['label'])
+        plt.ylabel("Top-Gate Voltage [V]", fontsize=FONT_SIZES['label'])
+        plt.xticks(fontsize=FONT_SIZES['ticks'])
+        plt.yticks(fontsize=FONT_SIZES['ticks'])
+        plt.legend(fontsize=FONT_SIZES['legend'])
+        plt.tight_layout()
 
 # =============================================================================
 # --- SWING CALCULATION DEMONSTRATION PLOT ---
@@ -176,35 +200,26 @@ if target_pixel_filename:
         
         fig, ax = plt.subplots(figsize=(10, 7))
         ax.plot(slice_data[gate2_col_name], slice_data['iph_in_phase'], marker='o', label='Photocurrent Data')
-        ax.axhline(iph_max, color='green', linestyle='--', label=f'Max I_ph = {iph_max:.2e} A')
-        ax.axhline(iph_min, color='red', linestyle='--', label=f'Min I_ph = {iph_min:.2e} A')
-        
-        ax.text(0.95, 0.5, f'Swing = {swing_value:.2e} A',
-            transform=ax.transAxes, # Use relative coordinates
-            va='center', ha='right',  # Correct alignment for the new position
-            fontsize=14,
-            bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.5'))
-
-        ax.set_title(f"Pixel ({px}, {py}) at fixed V_BG = {vbg_for_max_swing:.2f} V")
-        ax.set_xlabel("Top Gate Voltage (V_TG) [V]"); ax.set_ylabel("In-Phase Photocurrent (I_ph) [A]")
-        ax.legend(); ax.grid(True, linestyle=':')
-        plt.tight_layout(); plt.show()
-    else:
-        print(f"  - No data for Pixel (2, 2) at its optimal V_BG of {vbg_for_max_swing:.2f} V.")
-else:
-    print("  - Pixel (2, 2) not found. Skipping demonstration plot.")
+        ax.axhline(iph_max, color='green', linestyle='--', label=f'Maximum Photocurrent = {iph_max:.2f}{UNIT_LABEL}')
+        ax.axhline(iph_min, color='red', linestyle='--', label=f'Minimum Photocurrent = {iph_min:.2f}{UNIT_LABEL}')
+        ax.text(0.95, 0.5, f'Swing = {swing_value:.2f}{UNIT_LABEL}', transform=ax.transAxes, va='center', ha='right', fontsize=14, bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.5'))
+        ax.set_title(f"Pixel ({px}, {py}) at fixed bottom-gate voltage ({vbg_for_max_swing:.2f}V)", fontsize=FONT_SIZES['title'])
+        ax.set_xlabel("Top Gate Voltage [V]", fontsize=FONT_SIZES['label'])
+        ax.set_ylabel(f"In-Phase Photocurrent [{UNIT_LABEL}]", fontsize=FONT_SIZES['label'])
+        ax.tick_params(axis='both', which='major', labelsize=FONT_SIZES['ticks'])
+        ax.legend(fontsize=FONT_SIZES['legend']); ax.grid(True, linestyle=':')
+        plt.tight_layout()
 
 # =============================================================================
 # --- FINAL SUMMARY AND COMPARISON PLOTS ---
 # =============================================================================
 print("\n--- Generating Summary & Comparison Plots ---")
-
 # --- Summary Table ---
 sorted_results_list = sorted(results_by_filename.values(), key=lambda item: item["max_range_value"], reverse=True)
 print("\n--- Summary of Maximum Swing per Pixel (Sorted by Performance) ---")
-print(f"{'Pixel':<10} | {'Max Swing (A)':<15} | {'V_BG for Max Swing (V)'}"); print("-" * 55)
+print(f"{'Pixel':<10} | {'Max Swing ('+UNIT_LABEL+')':<15} | {'Bottom-Gate V for Max Swing (V)'}"); print("-" * 60)
 for res in sorted_results_list:
-    if res['max_range_value'] > 0: print(f"({res['x_coord']}, {res['y_coord']}){'':<4} | {res['max_range_value']:.3e}         | {res['max_range_vbg']:.{decimals}f}")
+    if res['max_range_value'] > 0: print(f"({res['x_coord']}, {res['y_coord']}){'':<4} | {res['max_range_value']:.3f} {'':<11}| {res['max_range_vbg']:.{decimals}f}")
 
 # --- Plot: Spatial Performance Map ---
 performance_grid = np.full((ARRAY_ROWS, ARRAY_COLS), np.nan)
@@ -214,24 +229,31 @@ for res in results_by_filename.values():
 fig, ax = plt.subplots(figsize=(8, 7))
 im = ax.imshow(performance_grid, cmap='viridis', interpolation='nearest')
 ax.set_xticks(np.arange(ARRAY_COLS)); ax.set_yticks(np.arange(ARRAY_ROWS))
-ax.set_xticklabels(np.arange(1, ARRAY_COLS + 1)); ax.set_yticklabels(np.arange(1, ARRAY_ROWS + 1))
-ax.set_xlabel("X Coordinate"); ax.set_ylabel("Y Coordinate")
-ax.set_title(f"Maximum Photocurrent Swing Across {ARRAY_ROWS}x{ARRAY_COLS} Array", pad=20)
+ax.set_xticklabels(np.arange(1, ARRAY_COLS + 1), fontsize=FONT_SIZES['ticks'])
+ax.set_yticklabels(np.arange(1, ARRAY_ROWS + 1), fontsize=FONT_SIZES['ticks'])
+ax.set_xlabel("X Coordinate", fontsize=FONT_SIZES['label']); ax.set_ylabel("Y Coordinate", fontsize=FONT_SIZES['label'])
+ax.set_title(f"Maximum Photocurrent Swing Across {ARRAY_ROWS}x{ARRAY_COLS} Array", pad=20, fontsize=FONT_SIZES['title'])
 for i in range(ARRAY_ROWS):
     for j in range(ARRAY_COLS):
         if not np.isnan(performance_grid[i, j]):
-            ax.text(j, i, f"{performance_grid[i, j]:.2e}", ha="center", va="center", color="w", weight="bold")
-fig.colorbar(im, label="Max I_ph Swing [A]"); plt.show()
+            ax.text(j, i, f"{performance_grid[i, j]:.2f}", ha="center", va="center", color="w", weight="bold")
+cbar = fig.colorbar(im, label="Maximum Photocurrent Swing [A]")
+cbar.ax.tick_params(labelsize=FONT_SIZES['ticks'])
+cbar.set_label(f"Maximum Photocurrent Swing [{UNIT_LABEL}]", size=FONT_SIZES['label'])
 
 # --- Plot: Combined Individual and Mean Swing Comparison ---
 plt.figure(figsize=(12, 8))
 for series in all_swing_series:
     plt.plot(series.index, series.values, linestyle='-', marker=None, lw=2.0, alpha=0.7, label=series.name)
 plt.plot(mean_swing_per_vbg.index, mean_swing_per_vbg.values, linestyle='--', color='k', marker='.', markersize=4, lw=1.5, label='Mean Swing', zorder=10)
-plt.plot(best_overall_vbg, best_mean_swing_value, marker='*', color='gold', markersize=18, markeredgecolor='black', label=f'Max of Mean ({best_mean_swing_value:.2e} A)', zorder=11, linestyle='none')
-plt.axvline(best_overall_vbg, color='r', linestyle='--', lw=2, label=f'Overall Best V_BG = {best_overall_vbg:.{decimals}f} V')
-plt.title("Individual and Mean Photocurrent Swings vs. V_BG"); plt.xlabel("V_BG [V]"); plt.ylabel("I_ph Swing [A]")
-plt.legend(loc='best', title="Pixels & Mean", fontsize='small'); plt.grid(True, which='both', linestyle='--'); plt.tight_layout(); plt.show()
+plt.plot(best_overall_vbg, best_mean_swing_value, marker='*', color='gold', markersize=18, markeredgecolor='black', label=f'Max of Mean ({best_mean_swing_value:.2f} {UNIT_LABEL})', zorder=11, linestyle='none')
+plt.axvline(best_overall_vbg, color='r', linestyle='--', lw=2, label=f'Overall Best Bottom-Gate Voltage = {best_overall_vbg:.{decimals}f} V')
+plt.title("Individual and Mean Photocurrent Swings vs. Bottom-Gate Voltage", fontsize=FONT_SIZES['title'])
+plt.xlabel("Bottom-Gate Voltage [V]", fontsize=FONT_SIZES['label'])
+plt.ylabel(f"Photocurrent Swing [{UNIT_LABEL}]", fontsize=FONT_SIZES['label'])
+plt.xticks(fontsize=FONT_SIZES['ticks'])
+plt.yticks(fontsize=FONT_SIZES['ticks'])
+plt.legend(loc='best', title="Pixels & Mean", fontsize=FONT_SIZES['legend']); plt.grid(True, which='both', linestyle='--'); plt.tight_layout()
 
 # --- Plot: Sequential Heatmap Subplots ---
 num_files = len(all_dataframes)
@@ -247,12 +269,15 @@ if num_files > 0:
         if x_g is not None:
             pcm = ax.pcolormesh(x_g, y_g, z_g, shading='auto', cmap='RdBu_r', vmin=-global_max, vmax=global_max)
             ax.axvline(best_overall_vbg, color='green', linestyle='--', lw=2.5)
-            ax.set_title(f"Pixel ({px}, {py})", fontsize=10)
+            ax.set_title(f"Pixel ({px}, {py})", fontsize=16)
+            ax.tick_params(axis='both', which='major', labelsize=FONT_SIZES['ticks'] - 2)
         else:
             ax.text(0.5, 0.5, 'Grid Error', ha='center', va='center'); ax.set_title(f"Pixel ({px}, {py})", fontsize=10)
     for i in range(num_files, len(axes)): axes[i].set_visible(False)
-    if pcm: fig.colorbar(pcm, ax=axes.tolist(), label="I_ph (X) [A]", aspect=40, pad=0.02)
-    fig.suptitle(f"Comparison of Photocurrent Maps\n(Overall Best V_BG = {best_overall_vbg:.2f} V shown as green dashed line)", fontsize=16)
-    plt.show()
+    if pcm:
+        cbar = fig.colorbar(pcm, ax=axes.tolist(), label="In-Phase Photocurrent [A]", aspect=40, pad=0.02)
+        cbar.ax.tick_params(labelsize=FONT_SIZES['ticks'])
+        cbar.set_label(f"In-Phase Photocurrent [{UNIT_LABEL}]", size=FONT_SIZES['label'])
 
 print("\nOverall analysis script finished.")
+plt.show() # Show all figures at the end

@@ -179,10 +179,10 @@ class Simulator:
     
     def _create_perceptual_power_map(self):
         """Creates a mapping from normalized intensity [0,1] to an effective ND filter value."""
-        gamma = 2.2
+        gamma = 2.2 if self.cfg.dynamic_mode_use_gamma_correction else 1.0
         transmission_max = 10**(-self.nd_min_map)
         transmission_min = 10**(-self.nd_max_map)
-
+        
         def perceptual_map(perceptual_intensity):
             linear_light = perceptual_intensity**gamma
             transmission = transmission_min + (transmission_max - transmission_min) * linear_light

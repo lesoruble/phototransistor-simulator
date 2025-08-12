@@ -36,8 +36,6 @@ def _load_kernel(arg: str | Path) -> np.ndarray:
     return arr
 
 
-# In cli.py, replace the entire run_kernel_cmd function.
-
 @app.command("run-kernel")
 def run_kernel_cmd(
     image_path: Path = typer.Argument(..., exists=True, readable=True, help="Path to the input image file."),

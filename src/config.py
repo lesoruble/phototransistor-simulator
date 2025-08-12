@@ -33,6 +33,7 @@ class KernelConfig:
     decimals_v_tg_display: int = 2
     fixed_vbg_value: float = -1.2 
     fallback_kernel_scale_factor: float = 5e-8 # Used if characterization data is missing
+    dynamic_mode_use_gamma_correction: bool = True # If True, use gamma=2.2. If False, use gamma=1.0 (linear).
 
     # --- Dynamic Regime Search Parameters ---
     REFERENCE_PIXEL_X: int = 2
