@@ -18,7 +18,7 @@ decimals = 2
 UNIT_SCALE = 1e9  # To convert from Amps to microamps (µA)
 UNIT_LABEL = "nA"
 
-# --- NEW: Font Size Configuration for Plots ---
+# --- Font Size Configuration for Plots ---
 FONT_SIZES = {
     'title': 20,
     'label': 18,

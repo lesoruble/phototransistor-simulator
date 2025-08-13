@@ -28,7 +28,7 @@ def _load_kernel(arg: str | Path) -> np.ndarray:
 
     if p.suffix.lower() == ".json":
         arr = np.array(json.loads(p.read_text()), dtype=np.float32)
-    else:  # assume .npy
+    else:  
         arr = np.load(p).astype(np.float32)
 
     if arr.shape != (3, 3):

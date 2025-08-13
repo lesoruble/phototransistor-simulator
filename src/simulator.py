@@ -47,7 +47,6 @@ class Simulator:
         self.cfg = config
         self.min_x = min(k[0] for k in self.full_char_data.keys())
         self.min_y = min(k[1] for k in self.full_char_data.keys())
-        # Add these two lines
         self.nd_min_map = 2.0
         self.nd_max_map = 5.0        
         self.power_map = self._create_perceptual_power_map()
@@ -191,7 +190,6 @@ class Simulator:
         log.info(f"Created perceptually correct power map for ND range [{self.nd_min_map}, {self.nd_max_map}]")
         return perceptual_map
 
-        # In simulator.py, add this new method to the Simulator class
     def get_adaptive_kernel_weights(self, stimulus_patch_0_1: np.ndarray, fixed_voltages: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
         Calculates the adaptive kernel weights (currents) based on

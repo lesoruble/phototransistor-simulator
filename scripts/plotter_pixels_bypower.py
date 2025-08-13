@@ -46,7 +46,7 @@ def calculate_r_squared(y_data, y_fit):
     ss_res = np.sum((y_data - y_fit)**2); ss_tot = np.sum((y_data - np.mean(y_data))**2)
     return 1 - (ss_res / ss_tot) if ss_tot > 0 else 1.0
 
-# --- Loader and Helper Functions (Unchanged) ---
+# --- Loader and Helper Functions ---
 def find_intersections(x_data, y_data, target_y):
     intersections = [];
     for i in range(len(x_data) - 1):
@@ -91,7 +91,6 @@ for nd_value in unique_nd_filters:
 
     print(f"\n--- Processing ND Filter = {int(nd_value)} ---")
     fig, ax = plt.subplots(figsize=(12, 8))
-    # ... (This entire block is the original, correct logic and is unchanged) ...
     nd_group_df = master_df[master_df[nd_filter_col] == nd_value]
     unique_pixels = nd_group_df[[x_coord_col, y_coord_col]].drop_duplicates().sort_values(by=[y_coord_col, x_coord_col])
     if unique_pixels.empty: plt.close(fig); continue
@@ -185,7 +184,6 @@ for nd_value in unique_nd_filters:
         plt.draw(); xmin, xmax = ax.get_xlim()
         for weight, target_value in targets.items():
             line_color = 'green' if weight > 0 else 'blue' if weight < 0 else 'gray'
-            # *** CORRECTED LOGIC FOR LINE AND TEXT PLACEMENT ***
             if weight == 8:
                 line_start_x = xmin + 0.2 * (xmax - xmin) # Start line after the legend
                 text_x_pos = line_start_x + 0.1 * (xmax - xmin)

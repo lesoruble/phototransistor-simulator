@@ -111,7 +111,6 @@ class SaveOptionsDialog(tk.Toplevel):
         self.result = None
         self.destroy()
 
-# --- End of New Dialog Class ---
 
 
 class ConvolutionApp:
@@ -482,7 +481,6 @@ class ConvolutionApp:
                 return
             ref_nd_level = float(ref_nd_level_str)
 
-            # ... (The calculation part is identical to before) ...
             self.update_step_text("Starting comparison workflow...")
             self.master.update_idletasks()
             unitless_kernel = np.array([[float(kernel_cells[r, c]['desired_w_entry'].get() or "0.0") for c in range(3)] for r in range(3)])
@@ -508,9 +506,7 @@ class ConvolutionApp:
             proc_grayscale = to_grayscale(proc_raw_output)
             ref_name = f"Fixed_ND={ref_nd_level}"
             proc_name = "Dynamic_Mode"
-            
-            # --- NEW LOGIC STARTS HERE ---
-            
+                        
             # 1. Always calculate and display metrics in the text box
             self.update_step_text("Calculating metrics...")
             metrics = image_comparator.calculate_metrics(ref_grayscale, proc_grayscale)
@@ -885,7 +881,7 @@ class ConvolutionApp:
             
             ax.plot(v_tg_axis, ratio, label=f'|I(ND={nd_a})| / |I(ND={nd_b})|')
 
-        # --- NEW: Plot Normalized ND=2.0 Current on a Secondary Y-axis ---
+        #Plot Normalized ND=2.0 Current on a Secondary Y-axis
         if 2.0 in i_ph_df.columns:
             # Create the secondary axis, sharing the same x-axis
             ax2 = ax.twinx()
@@ -1033,7 +1029,7 @@ class ConvolutionApp:
            self.update_step_text("Error: No convolution data available to save.")
            return
        
-       # --- NEW: Use the custom dialog ---
+       # Use the custom dialog
        dialog = SaveOptionsDialog(self.master)
        save_format = dialog.result # This will be 'raw', 'grayscale', or None
 
