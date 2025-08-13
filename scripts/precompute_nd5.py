@@ -60,7 +60,6 @@ final_voltage_cache = {}
 # --- Step 1: Find the Best Fit for Each Pixel ---
 print("\n--- Step 1: Finding the best predictive model for each pixel ---")
 pixel_fits = {}
-# ... (This entire fitting block is unchanged and correct) ...
 for pixel_coord in all_pixel_coords:
     print(f"  - Analyzing Pixel {pixel_coord}...")
     clean_data = clean_char_data.get(pixel_coord).i_ph_vs_nd_original[CLEAN_ND_FOR_PRIOR] if pixel_coord in clean_char_data else pd.Series()
@@ -139,7 +138,6 @@ for kernel_name, unitless_kernel in ALL_PRESET_KERNELS.items():
             ax_debug.plot(x_fit, y_fit, 'r-', label=f"Best Fit ({fit_info['name']})")
             
             final_vtg = 0.0
-            # --- *** THIS IS THE DEFINITIVE CORRECTED LOGIC *** ---
             crossings = find_intersections(x_fit, y_fit, target_iph)
             
             if crossings:
@@ -164,7 +162,6 @@ for kernel_name, unitless_kernel in ALL_PRESET_KERNELS.items():
                     print(f"    -> WARNING: No intersection for pixel {pixel_coord}. Using Vtg at MIN dip: {final_vtg:.2f} V")
             
             voltage_matrix[r_k, c_k] = final_vtg
-            # --- END OF FIX ---
 
             ax_debug.axhline(target_iph, color='blue', linestyle='--', label=f'Target Iph: {target_iph:.2e} A')
             ax_debug.axvline(final_vtg, color='green', linestyle=':', label=f'Found Vtg: {final_vtg:.2f} V')
